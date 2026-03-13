@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eventhub
+      POSTGRES_PASSWORD: eventhub_password
+      POSTGRES_DB: eventhub_db
+    ports:
+      - "5440:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventhub -d eventhub_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./EventHub-Backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./EventHub-Backend/src:/app/src
+      - ./EventHub-Backend/prisma:/app/prisma
+    env_file:
+      - ./EventHub-Backend/.env
+    environment:
+      DATABASE_URL: "postgresql://eventhub:eventhub_password@postgres:5432/eventhub_db"
+      PORT: "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./EventHubFrontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./EventHubFrontend/src:/app/src
+      - ./EventHubFrontend/public:/app/public
+      - ./EventHubFrontend/.env:/app/.env
+      - ./EventHubFrontend/vite.config.ts:/app/vite.config.ts
+      - ./EventHubFrontend/index.html:/app/index.html
+    env_file:
+      - ./EventHubFrontend/.env
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
